@@ -1,0 +1,214 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN_HR
+  STAFF_HR
+  APPROVER
+  VIEWER
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum TemplateStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum LetterStatus {
+  DRAFT
+  REVIEW
+  REVISION
+  APPROVED
+  PUBLISHED
+  CANCELLED
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  REVISION_REQUESTED
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  SUBMIT_APPROVAL
+  APPROVE
+  REJECT
+  REVISION_REQUEST
+  PUBLISH
+  LOGIN
+  LOGOUT
+}
+
+model User {
+  id                  String     @id @default(uuid()) @db.Uuid
+  name                String     @db.VarChar(120)
+  email               String     @unique @db.VarChar(180)
+  password            String
+  role                UserRole
+  status              UserStatus @default(ACTIVE)
+  refreshTokenHash    String?
+  createdAt           DateTime   @default(now()) @map("created_at")
+  updatedAt           DateTime   @updatedAt @map("updated_at")
+  createdLetters      Letter[]   @relation("LetterCreator")
+  approvalAssignments Letter[]   @relation("LetterApprover")
+  approvals           Approval[]
+  auditLogs           AuditLog[]
+
+  @@map("users")
+}
+
+model LetterCategory {
+  id              String                 @id @default(uuid()) @db.Uuid
+  categoryName    String                 @map("category_name") @db.VarChar(120)
+  categoryCode    String                 @unique @map("category_code") @db.VarChar(20)
+  description     String?
+  numberingFormat String                 @map("numbering_format") @db.VarChar(120)
+  isActive        Boolean                @default(true) @map("is_active")
+  createdAt       DateTime               @default(now()) @map("created_at")
+  updatedAt       DateTime               @updatedAt @map("updated_at")
+  types           LetterType[]
+  templates       LetterTemplate[]
+  letters         Letter[]
+  sequences       LetterNumberSequence[]
+
+  @@map("letter_categories")
+}
+
+model LetterType {
+  id          String           @id @default(uuid()) @db.Uuid
+  categoryId  String           @map("category_id") @db.Uuid
+  typeName    String           @map("type_name") @db.VarChar(180)
+  typeCode    String           @map("type_code") @db.VarChar(30)
+  description String?
+  isActive    Boolean          @default(true) @map("is_active")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+  category    LetterCategory   @relation(fields: [categoryId], references: [id])
+  templates   LetterTemplate[]
+  letters     Letter[]
+
+  @@unique([categoryId, typeCode])
+  @@index([categoryId, isActive])
+  @@map("letter_types")
+}
+
+model LetterTemplate {
+  id               String         @id @default(uuid()) @db.Uuid
+  categoryId       String         @map("category_id") @db.Uuid
+  letterTypeId     String?        @map("letter_type_id") @db.Uuid
+  templateName     String         @map("template_name") @db.VarChar(160)
+  templateContent  String         @map("template_content")
+  docxTemplatePath String?        @map("docx_template_path")
+  placeholders     String[]       @default([])
+  version          Int            @default(1)
+  status           TemplateStatus @default(DRAFT)
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @updatedAt @map("updated_at")
+  category         LetterCategory @relation(fields: [categoryId], references: [id])
+  letterType       LetterType?    @relation(fields: [letterTypeId], references: [id])
+  letters          Letter[]
+
+  @@unique([categoryId, templateName, version])
+  @@index([categoryId, status])
+  @@index([letterTypeId, status])
+  @@map("letter_templates")
+}
+
+model LetterNumberSequence {
+  id            String         @id @default(uuid()) @db.Uuid
+  categoryId    String         @map("category_id") @db.Uuid
+  month         Int
+  year          Int
+  currentNumber Int            @default(0) @map("last_number")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+  category      LetterCategory @relation(fields: [categoryId], references: [id])
+
+  @@unique([categoryId, month, year])
+  @@map("letter_sequences")
+}
+
+model Letter {
+  id                    String         @id @default(uuid()) @db.Uuid
+  letterNumber          String?        @unique @map("letter_number") @db.VarChar(80)
+  generatedLetterNumber String?        @unique @map("generated_letter_number") @db.VarChar(80)
+  categoryId            String         @map("category_id") @db.Uuid
+  letterTypeId          String?        @map("letter_type_id") @db.Uuid
+  sequenceNumber        Int?           @map("sequence_number")
+  letterDate            DateTime?      @map("letter_date")
+  letterMonth           Int?           @map("letter_month")
+  letterYear            Int?           @map("letter_year")
+  letterMonthRoman      String?        @map("letter_month_roman") @db.VarChar(8)
+  templateId            String         @map("template_id") @db.Uuid
+  creatorId             String         @map("creator_id") @db.Uuid
+  approverId            String?        @map("approver_id") @db.Uuid
+  status                LetterStatus   @default(DRAFT)
+  content               Json
+  generatedDocx         String?        @map("generated_docx")
+  generatedPdf          String?        @map("generated_pdf")
+  approvedAt            DateTime?      @map("approved_at")
+  publishedAt           DateTime?      @map("published_at")
+  createdAt             DateTime       @default(now()) @map("created_at")
+  updatedAt             DateTime       @updatedAt @map("updated_at")
+  category              LetterCategory @relation(fields: [categoryId], references: [id])
+  letterType            LetterType?    @relation(fields: [letterTypeId], references: [id])
+  template              LetterTemplate @relation(fields: [templateId], references: [id])
+  creator               User           @relation("LetterCreator", fields: [creatorId], references: [id])
+  approver              User?          @relation("LetterApprover", fields: [approverId], references: [id])
+  approvals             Approval[]
+
+  @@index([status, createdAt])
+  @@index([categoryId, status])
+  @@index([categoryId, letterMonth, letterYear])
+  @@index([letterTypeId, status])
+  @@map("letters")
+}
+
+model Approval {
+  id         String         @id @default(uuid()) @db.Uuid
+  letterId   String         @map("letter_id") @db.Uuid
+  approverId String         @map("approver_id") @db.Uuid
+  status     ApprovalStatus @default(PENDING)
+  notes      String?
+  approvedAt DateTime?      @map("approved_at")
+  createdAt  DateTime       @default(now()) @map("created_at")
+  updatedAt  DateTime       @updatedAt @map("updated_at")
+  letter     Letter         @relation(fields: [letterId], references: [id])
+  approver   User           @relation(fields: [approverId], references: [id])
+
+  @@index([letterId, status])
+  @@map("approvals")
+}
+
+model AuditLog {
+  id        String      @id @default(uuid()) @db.Uuid
+  userId    String?     @map("user_id") @db.Uuid
+  action    AuditAction
+  entity    String      @db.VarChar(80)
+  entityId  String?     @map("entity_id") @db.VarChar(80)
+  oldValue  Json?       @map("old_value")
+  newValue  Json?       @map("new_value")
+  ipAddress String?     @map("ip_address") @db.VarChar(80)
+  userAgent String?     @map("user_agent")
+  timestamp DateTime    @default(now())
+  user      User?       @relation(fields: [userId], references: [id])
+
+  @@index([entity, entityId])
+  @@index([userId, timestamp])
+  @@map("audit_logs")
+}
