@@ -42,7 +42,7 @@ export class ArchiveService {
 
   async getDownloadPath(letterId: string, type: 'pdf' | 'docx') {
     const letter = await this.prisma.letter.findUniqueOrThrow({ where: { id: letterId } });
-    const filePath = type === 'pdf' ? letter.generatedPdf : letter.generatedDocx;
+    if (type === 'docx') throw new Error('DOCX is no longer supported'); const filePath = letter.generatedPdf;
     if (!filePath) throw new NotFoundException(`Generated ${type.toUpperCase()} not found`);
     return filePath;
   }

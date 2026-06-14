@@ -74,11 +74,7 @@ export class LettersController {
     return this.sendInlinePdf(res, await this.letters.previewPdf(id));
   }
 
-  @Roles(AppRole.ADMIN_HR, AppRole.STAFF_HR)
-  @Post(':id/generate/docx')
-  generateDocx(@CurrentUserDecorator() user: CurrentUser, @Param('id') id: string) {
-    return this.letters.generateDocx(user.id, id);
-  }
+  
 
   @Roles(AppRole.ADMIN_HR, AppRole.STAFF_HR)
   @Post(':id/generate/pdf')

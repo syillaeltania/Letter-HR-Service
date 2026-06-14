@@ -31,6 +31,9 @@ export class LettersService {
   ) {}
 
   async create(actorId: string, dto: CreateLetterDto) {
+    if (dto.htmlContent) {
+      dto.content = { ...dto.content, htmlContent: dto.htmlContent };
+    }
     await this.validateLetterType(dto.categoryId, dto.letterTypeId);
     await this.validateManualLetterNumber(dto.categoryId, dto.letterTypeId, dto.content);
     const template = await this.prisma.letterTemplate.findUniqueOrThrow({
@@ -128,11 +131,12 @@ export class LettersService {
 
   async preview(id: string) {
     const letter = await this.findOne(id);
+    const contentToRender = (letter.content as Record<string, unknown>)?.htmlContent as string || letter.template.templateContent;
     return {
       letterId: letter.id,
       letterNumber: letter.letterNumber,
       content: await this.documents.renderPreview(
-        letter.template.templateContent,
+        contentToRender,
         this.withNumberingContent(letter.content as Record<string, unknown>, letter),
         letter.letterNumber,
       ),
@@ -141,11 +145,12 @@ export class LettersService {
 
   async previewPdf(id: string) {
     const letter = await this.findOne(id);
+    const content = letter.content as Record<string, unknown>;
     return this.documents.generatePdf(
-      letter.template.templateContent,
-      this.withNumberingContent(letter.content as Record<string, unknown>, letter),
+      this.resolveTemplateContent(letter.template.templateContent, content),
+      this.withNumberingContent(content, letter),
       letter.letterNumber ?? 'PREVIEW',
-      this.resolveDocxTemplatePath(letter.template.docxTemplatePath, letter.letterType?.typeCode ?? letter.category.categoryCode),
+      
     );
   }
 
@@ -176,10 +181,9 @@ export class LettersService {
       : await this.numbering.previewBlankSequence(dto.categoryId, dto.letterTypeId, this.resolveLetterDateValue(dto.content));
 
     return this.documents.generatePdf(
-      template.templateContent,
+      this.resolveTemplateContent(template.templateContent, dto.content, dto.htmlContent),
       this.withPreviewNumberingContent(dto.content, previewNumber),
       previewNumber.letterNumber,
-      this.resolveDocxTemplatePath(template.docxTemplatePath, letterType?.typeCode ?? template.category.categoryCode),
     );
   }
 
@@ -195,13 +199,8 @@ export class LettersService {
   async generateDocx(actorId: string, id: string) {
     const letter = await this.findOne(id);
     if (!letter.letterNumber) throw new BadRequestException('Letter number is required');
-    const generatedDocx = await this.documents.generateDocx(
-      letter.template.templateContent,
-      this.withNumberingContent(letter.content as Record<string, unknown>, letter),
-      letter.letterNumber,
-      this.resolveDocxTemplatePath(letter.template.docxTemplatePath, letter.letterType?.typeCode ?? letter.category.categoryCode),
-    );
-    const updated = await this.prisma.letter.update({ where: { id }, data: { generatedDocx } });
+    
+    const updated = await this.prisma.letter.update({ where: { id }, data: { /* removed generatedDocx */ } });
     await this.auditLogs.record(actorId, 'UPDATE', 'Letter', id, letter, updated);
     this.outgoingEvents.emit('letter.updated', { id: updated.id, status: updated.status });
     return updated;
@@ -210,11 +209,12 @@ export class LettersService {
   async generatePdf(actorId: string, id: string) {
     const letter = await this.findOne(id);
     if (!letter.letterNumber) throw new BadRequestException('Letter number is required');
+    const content = letter.content as Record<string, unknown>;
     const generatedPdf = await this.documents.generatePdf(
-      letter.template.templateContent,
-      this.withNumberingContent(letter.content as Record<string, unknown>, letter),
+      this.resolveTemplateContent(letter.template.templateContent, content),
+      this.withNumberingContent(content, letter),
       letter.letterNumber,
-      this.resolveDocxTemplatePath(letter.template.docxTemplatePath, letter.letterType?.typeCode ?? letter.category.categoryCode),
+      
     );
     const updated = await this.prisma.letter.update({ where: { id }, data: { generatedPdf } });
     await this.auditLogs.record(actorId, 'UPDATE', 'Letter', id, letter, updated);
@@ -273,6 +273,11 @@ export class LettersService {
       letter_month_roman: letter.letterMonthRoman ?? this.romanMonth(issuedAt.getMonth() + 1),
       letter_year: letter.letterYear ?? issuedAt.getFullYear(),
     };
+  }
+
+  private resolveTemplateContent(templateContent: string, content?: Record<string, unknown>, htmlContent?: string) {
+    const editedHtml = String(htmlContent ?? content?.htmlContent ?? '').trim();
+    return editedHtml || templateContent;
   }
 
   private withPreviewNumberingContent(
