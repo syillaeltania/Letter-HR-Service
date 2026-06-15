@@ -88,9 +88,12 @@ export class LettersController {
     return this.letters.publish(user.id, id);
   }
 
-  private sendInlinePdf(res: Response, filePath: string) {
+  private sendInlinePdf(res: Response, result: string | Buffer) {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'inline; filename="letter-preview.pdf"');
-    return res.sendFile(filePath);
+    if (Buffer.isBuffer(result)) {
+      return res.send(result);
+    }
+    return res.sendFile(result);
   }
 }

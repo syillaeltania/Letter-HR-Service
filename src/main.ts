@@ -1,6 +1,6 @@
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { NestFactory } from '@nestjs/core';
+import { NestFactory, HttpAdapterHost } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ExpressAdapter } from '@nestjs/platform-express';
 import * as express from 'express';
@@ -35,7 +35,9 @@ async function bootstrap() {
       transform: true,
     }),
   );
-  app.useGlobalFilters(new PrismaExceptionFilter());
+  
+  const { httpAdapter } = app.get(HttpAdapterHost);
+  app.useGlobalFilters(new PrismaExceptionFilter(httpAdapter));
 
   if (config.get<string>('SWAGGER_ENABLED') === 'true') {
     const swaggerConfig = new DocumentBuilder()

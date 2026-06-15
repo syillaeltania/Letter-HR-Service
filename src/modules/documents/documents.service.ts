@@ -108,15 +108,14 @@ export class DocumentsService {
     return this.replacePlaceholders(templateContent, { ...content, letter_number: letterNumber ?? '' });
   }
 
-  async generatePdf(templateContent: string, content: Record<string, unknown>, letterNumber: string) {
-    const outputDir = path.resolve(this.config.get<string>('app.generatedDocPath', './storage/generated'));
-    await fs.mkdir(outputDir, { recursive: true });
+  async generatePdf(templateContent: string, content: Record<string, unknown>, letterNumber: string, outputDir?: string) {
+    if (outputDir) {
+      await fs.mkdir(outputDir, { recursive: true });
+    }
 
     const renderData = this.buildRenderData(content, letterNumber);
     const htmlBody = this.prepareHtmlForPdf(this.replacePlaceholders(templateContent, renderData));
     const assets = this.loadContractDocxAssets();
-
-    const pdfPath = path.join(outputDir, `${randomUUID()}.pdf`);
 
     const isProd = process.env.NODE_ENV === 'production';
     const puppeteerModule = 'puppeteer' + '-core';
@@ -139,8 +138,7 @@ export class DocumentsService {
     });
     const page = await browser.newPage();
     await page.setContent(htmlBody, { waitUntil: 'load' });
-    await page.pdf({
-      path: pdfPath,
+    const pdfBuffer = await page.pdf({
       format: 'A4',
       preferCSSPageSize: true,
       printBackground: true,
@@ -151,7 +149,15 @@ export class DocumentsService {
     });
     await browser.close();
 
-    return pdfPath;
+    const buffer = Buffer.from(pdfBuffer);
+    
+    if (outputDir) {
+      const pdfPath = path.join(outputDir, `${randomUUID()}.pdf`);
+      await fs.writeFile(pdfPath, buffer);
+      return pdfPath;
+    }
+
+    return buffer;
   }
   private replacePlaceholders(template: string, content: Record<string, unknown>) {
     return template.replace(/\{\{(\w+)}}/g, (_match, key: string) => String(content[key] ?? ''));

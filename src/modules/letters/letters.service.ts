@@ -64,6 +64,7 @@ export class LettersService {
   findAll(query: LetterQueryDto) {
     return this.prisma.letter.findMany({
       where: {
+        deletedAt: null,
         status: query.status,
         categoryId: query.categoryId,
         letterTypeId: query.letterTypeId,
@@ -87,8 +88,8 @@ export class LettersService {
   }
 
   findOne(id: string) {
-    return this.prisma.letter.findUniqueOrThrow({
-      where: { id },
+    return this.prisma.letter.findFirstOrThrow({
+      where: { id, deletedAt: null },
       include: { category: true, letterType: true, template: true, approvals: true },
     });
   }
@@ -124,8 +125,8 @@ export class LettersService {
   async deleteDraft(actorId: string, id: string) {
     const letter = await this.findOne(id);
     if (letter.status !== 'DRAFT') throw new ForbiddenException('Only draft letters can be deleted');
-    await this.prisma.letter.delete({ where: { id } });
-    await this.auditLogs.record(actorId, 'DELETE', 'Letter', id, letter, null);
+    const updated = await this.prisma.letter.update({ where: { id }, data: { deletedAt: new Date() } });
+    await this.auditLogs.record(actorId, 'DELETE', 'Letter', id, letter, updated);
     return { message: 'Draft deleted successfully' };
   }
 
@@ -210,12 +211,13 @@ export class LettersService {
     const letter = await this.findOne(id);
     if (!letter.letterNumber) throw new BadRequestException('Letter number is required');
     const content = letter.content as Record<string, unknown>;
-    const generatedPdf = await this.documents.generatePdf(
+    const outputDir = process.env.GENERATED_DOC_PATH ?? './storage/generated';
+    const generatedPdf = (await this.documents.generatePdf(
       this.resolveTemplateContent(letter.template.templateContent, content),
       this.withNumberingContent(content, letter),
       letter.letterNumber,
-      
-    );
+      outputDir
+    )) as string;
     const updated = await this.prisma.letter.update({ where: { id }, data: { generatedPdf } });
     await this.auditLogs.record(actorId, 'UPDATE', 'Letter', id, letter, updated);
     this.outgoingEvents.emit('letter.updated', { id: updated.id, status: updated.status });
