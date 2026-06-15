@@ -9,10 +9,12 @@ import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter';
 
-const server = express();
+let cachedServer: express.Express;
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, new ExpressAdapter(server), { bufferLogs: true });
+  if (!cachedServer) {
+    const server = express();
+    const app = await NestFactory.create(AppModule, new ExpressAdapter(server), { bufferLogs: true });
   const config = app.get(ConfigService);
   const requestBodyLimit = config.get<string>('app.requestBodyLimit', '2mb');
 
@@ -51,11 +53,20 @@ async function bootstrap() {
 
   await app.init();
 
-  if (process.env.NODE_ENV !== 'production') {
-    await app.listen(config.get<number>('app.port', 3000));
+    if (process.env.NODE_ENV !== 'production') {
+      await app.listen(config.get<number>('app.port', 3000));
+    }
+    
+    cachedServer = server;
   }
+  return cachedServer;
 }
 
-bootstrap();
+if (process.env.NODE_ENV !== 'production') {
+  bootstrap();
+}
 
-export default server;
+export default async (req: express.Request, res: express.Response) => {
+  const server = await bootstrap();
+  return server(req, res);
+};
