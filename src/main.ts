@@ -49,6 +49,8 @@ async function bootstrap() {
     SwaggerModule.setup(config.get<string>('SWAGGER_PATH', 'docs'), app, document);
   }
 
+  await app.init();
+
   if (process.env.NODE_ENV !== 'production') {
     await app.listen(config.get<number>('app.port', 3000));
   }
