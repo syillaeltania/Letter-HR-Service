@@ -3,8 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { NestFactory, HttpAdapterHost } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ExpressAdapter } from '@nestjs/platform-express';
-import * as express from 'express';
-import { json, urlencoded } from 'express';
+import express from 'express';
 import helmet from 'helmet';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
@@ -18,8 +17,8 @@ async function bootstrap() {
   const requestBodyLimit = config.get<string>('app.requestBodyLimit', '2mb');
 
   app.useLogger(app.get(Logger));
-  app.use(json({ limit: requestBodyLimit }));
-  app.use(urlencoded({ extended: true, limit: requestBodyLimit }));
+  app.use(express.json({ limit: requestBodyLimit }));
+  app.use(express.urlencoded({ extended: true, limit: requestBodyLimit }));
   app.use(helmet());
   app.enableCors({
     origin: config.get<string[]>('app.corsOrigins'),
