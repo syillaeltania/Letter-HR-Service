@@ -1,5 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
 import { LetterStatus, Prisma } from '@prisma/client';
+import { Client } from '@upstash/qstash';
 import { PrismaService } from '../../database/prisma.service';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { DocumentsService } from '../documents/documents.service';
@@ -22,13 +23,17 @@ type NumberingPreview = {
 
 @Injectable()
 export class LettersService {
+  private qstash: Client;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly documents: DocumentsService,
     private readonly auditLogs: AuditLogsService,
     private readonly outgoingEvents: OutgoingLetterEventsService,
     private readonly numbering: LetterNumberingService,
-  ) {}
+  ) {
+    this.qstash = new Client({ token: process.env.QSTASH_TOKEN || 'dummy' });
+  }
 
   async create(actorId: string, dto: CreateLetterDto) {
     if (dto.htmlContent) {
@@ -63,6 +68,7 @@ export class LettersService {
 
   findAll(query: LetterQueryDto) {
     return this.prisma.letter.findMany({
+      take: 50,
       where: {
         deletedAt: null,
         status: query.status,
@@ -210,18 +216,52 @@ export class LettersService {
   async generatePdf(actorId: string, id: string) {
     const letter = await this.findOne(id);
     if (!letter.letterNumber) throw new BadRequestException('Letter number is required');
-    const content = letter.content as Record<string, unknown>;
-    const outputDir = process.env.GENERATED_DOC_PATH ?? './storage/generated';
-    const generatedPdf = (await this.documents.generatePdf(
-      this.resolveTemplateContent(letter.template.templateContent, content),
-      this.withNumberingContent(content, letter),
-      letter.letterNumber,
-      outputDir
-    )) as string;
-    const updated = await this.prisma.letter.update({ where: { id }, data: { generatedPdf } });
-    await this.auditLogs.record(actorId, 'UPDATE', 'Letter', id, letter, updated);
-    this.outgoingEvents.emit('letter.updated', { id: updated.id, status: updated.status });
+
+    const updated = await this.prisma.letter.update({
+      where: { id },
+      data: { pdfStatus: 'PROCESSING' }
+    });
+
+    if (process.env.QSTASH_TOKEN && process.env.QSTASH_TOKEN !== 'dummy') {
+      const baseUrl = process.env.APP_URL || 'https://letter-hr-service.vercel.app/api';
+      await this.qstash.publishJSON({
+        url: `${baseUrl}/v1/worker/pdf`,
+        body: { actorId, letterId: id },
+      });
+    } else {
+      this.processPdfWorker(actorId, id).catch(console.error);
+    }
+
     return updated;
+  }
+
+  async processPdfWorker(actorId: string, id: string) {
+    try {
+      const letter = await this.findOne(id);
+      const content = letter.content as Record<string, unknown>;
+      const outputDir = process.env.GENERATED_DOC_PATH ?? './storage/generated';
+      
+      const generatedPdf = (await this.documents.generatePdf(
+        this.resolveTemplateContent(letter.template.templateContent, content),
+        this.withNumberingContent(content, letter),
+        letter.letterNumber!,
+        outputDir
+      )) as string;
+
+      const updated = await this.prisma.letter.update({ 
+        where: { id }, 
+        data: { generatedPdf, pdfStatus: 'COMPLETED' } 
+      });
+      await this.auditLogs.record(actorId, 'UPDATE', 'Letter', id, letter, updated);
+      this.outgoingEvents.emit('letter.updated', { id: updated.id, status: updated.status });
+      return updated;
+    } catch (error) {
+      await this.prisma.letter.update({
+        where: { id },
+        data: { pdfStatus: 'FAILED' }
+      });
+      throw error;
+    }
   }
 
   publish(actorId: string, id: string) {
