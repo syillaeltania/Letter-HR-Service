@@ -119,8 +119,10 @@ export class DocumentsService {
     const pdfPath = path.join(outputDir, `${randomUUID()}.pdf`);
 
     const isProd = process.env.NODE_ENV === 'production';
-    const puppeteer = (await eval(`import('puppeteer-core')`)).default;
-    const chromium = (await eval(`import('@sparticuz/chromium')`)).default;
+    const puppeteerModule = 'puppeteer' + '-core';
+    const chromiumModule = '@sparticuz' + '/chromium';
+    const puppeteer = (await eval(`import('${puppeteerModule}')`)).default;
+    const chromium = (await eval(`import('${chromiumModule}')`)).default;
 
     const executablePath = isProd
       ? await chromium.executablePath()
