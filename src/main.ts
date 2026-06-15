@@ -2,14 +2,17 @@ import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { json, urlencoded } from 'express';
+import { ExpressAdapter } from '@nestjs/platform-express';
+import express, { json, urlencoded } from 'express';
 import helmet from 'helmet';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter';
 
+const server = express();
+
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  const app = await NestFactory.create(AppModule, new ExpressAdapter(server), { bufferLogs: true });
   const config = app.get(ConfigService);
   const requestBodyLimit = config.get<string>('app.requestBodyLimit', '2mb');
 
@@ -18,7 +21,7 @@ async function bootstrap() {
   app.use(urlencoded({ extended: true, limit: requestBodyLimit }));
   app.use(helmet());
   app.enableCors({
-    origin: config.get<string[]>('app.corsOrigins', ['http://localhost:5173']),
+    origin: config.get<string[]>('app.corsOrigins'),
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
@@ -44,7 +47,11 @@ async function bootstrap() {
     SwaggerModule.setup(config.get<string>('SWAGGER_PATH', 'docs'), app, document);
   }
 
-  await app.listen(config.get<number>('app.port', 3000));
+  if (process.env.NODE_ENV !== 'production') {
+    await app.listen(config.get<number>('app.port', 3000));
+  }
 }
 
 bootstrap();
+
+export default server;
