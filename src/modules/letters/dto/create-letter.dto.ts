@@ -23,4 +23,8 @@ export class CreateLetterDto {
   @ApiProperty({ example: { employee_name: 'Jane Doe', position: 'HR Officer' } })
   @IsObject()
   content: Record<string, unknown>;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  htmlContent?: string;
 }

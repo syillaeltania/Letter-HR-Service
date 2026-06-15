@@ -67,7 +67,7 @@ export class LetterTemplatesService {
         letterTypeId,
         templateName: dto.templateName ?? source.templateName,
         templateContent: dto.templateContent ?? source.templateContent,
-        docxTemplatePath: source.docxTemplatePath,
+        
         placeholders: dto.placeholders ?? source.placeholders,
         status: dto.status ?? 'DRAFT',
         version: (latest?.version ?? source.version) + 1,
@@ -85,7 +85,7 @@ export class LetterTemplatesService {
     await fs.writeFile(filePath, file.buffer);
     const template = await this.prisma.letterTemplate.update({
       where: { id },
-      data: { docxTemplatePath: filePath },
+      data: { updatedAt: new Date() },
     });
     await this.auditLogs.record(actorId, 'UPDATE', 'LetterTemplate', id, oldValue, template);
     return template;

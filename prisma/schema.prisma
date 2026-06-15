@@ -113,7 +113,6 @@ model LetterTemplate {
   letterTypeId     String?        @map("letter_type_id") @db.Uuid
   templateName     String         @map("template_name") @db.VarChar(160)
   templateContent  String         @map("template_content")
-  docxTemplatePath String?        @map("docx_template_path")
   placeholders     String[]       @default([])
   version          Int            @default(1)
   status           TemplateStatus @default(DRAFT)
@@ -159,7 +158,6 @@ model Letter {
   approverId            String?        @map("approver_id") @db.Uuid
   status                LetterStatus   @default(DRAFT)
   content               Json
-  generatedDocx         String?        @map("generated_docx")
   generatedPdf          String?        @map("generated_pdf")
   approvedAt            DateTime?      @map("approved_at")
   publishedAt           DateTime?      @map("published_at")

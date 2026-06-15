@@ -31,8 +31,5 @@ export class ArchiveController {
     return res.download(await this.archive.getDownloadPath(id, 'pdf'));
   }
 
-  @Get('letters/:id/download/docx')
-  async downloadDocx(@Param('id') id: string, @Res() res: Response) {
-    return res.download(await this.archive.getDownloadPath(id, 'docx'));
-  }
+  
 }

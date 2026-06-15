@@ -10,5 +10,6 @@ export default () => ({
       .filter(Boolean),
     storagePath: process.env.STORAGE_PATH ?? './storage',
     generatedDocPath: process.env.GENERATED_DOC_PATH ?? './storage/generated',
+    requestBodyLimit: process.env.REQUEST_BODY_LIMIT ?? '4mb',
   },
 });
