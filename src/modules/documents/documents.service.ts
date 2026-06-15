@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import puppeteer from 'puppeteer-core';
-import chromium from '@sparticuz/chromium';
+
 import * as fs from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import * as path from 'node:path';
@@ -120,6 +119,9 @@ export class DocumentsService {
     const pdfPath = path.join(outputDir, `${randomUUID()}.pdf`);
 
     const isProd = process.env.NODE_ENV === 'production';
+    const puppeteer = (await eval(`import('puppeteer-core')`)).default;
+    const chromium = (await eval(`import('@sparticuz/chromium')`)).default;
+
     const executablePath = isProd
       ? await chromium.executablePath()
       : process.platform === 'win32'
