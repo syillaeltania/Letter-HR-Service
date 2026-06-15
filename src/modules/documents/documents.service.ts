@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import puppeteer from 'puppeteer';
+import puppeteer from 'puppeteer-core';
+import chromium from '@sparticuz/chromium';
 import * as fs from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import * as path from 'node:path';
@@ -118,9 +119,22 @@ export class DocumentsService {
 
     const pdfPath = path.join(outputDir, `${randomUUID()}.pdf`);
 
-    const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+    const isProd = process.env.NODE_ENV === 'production';
+    const executablePath = isProd
+      ? await chromium.executablePath()
+      : process.platform === 'win32'
+      ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
+      : process.platform === 'linux'
+      ? '/usr/bin/google-chrome'
+      : '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+
+    const browser = await puppeteer.launch({
+      args: isProd ? chromium.args : ['--no-sandbox', '--disable-setuid-sandbox'],
+      executablePath,
+      headless: true,
+    });
     const page = await browser.newPage();
-    await page.setContent(htmlBody, { waitUntil: 'networkidle0' });
+    await page.setContent(htmlBody, { waitUntil: 'load' });
     await page.pdf({
       path: pdfPath,
       format: 'A4',
