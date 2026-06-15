@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
@@ -23,6 +25,10 @@ import jwtConfig from './config/jwt.config';
       envFilePath: ['.env'],
       load: [appConfig, jwtConfig],
     }),
+    ThrottlerModule.forRoot([{
+      ttl: 60000,
+      limit: 100,
+    }]),
     LoggerModule.forRoot({
       pinoHttp: {
         redact: ['req.headers.authorization', 'req.body.password', 'req.body.refreshToken'],
@@ -40,6 +46,12 @@ import jwtConfig from './config/jwt.config';
     LettersModule,
     ApprovalsModule,
     ArchiveModule,
+  ],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
   ],
 })
 export class AppModule {}

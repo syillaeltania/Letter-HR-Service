@@ -41,6 +41,13 @@ enum ApprovalStatus {
   REVISION_REQUESTED
 }
 
+enum PdfStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
 enum AuditAction {
   CREATE
   UPDATE
@@ -157,6 +164,7 @@ model Letter {
   creatorId             String         @map("creator_id") @db.Uuid
   approverId            String?        @map("approver_id") @db.Uuid
   status                LetterStatus   @default(DRAFT)
+  pdfStatus             PdfStatus      @default(PENDING) @map("pdf_status")
   content               Json
   generatedPdf          String?        @map("generated_pdf")
   approvedAt            DateTime?      @map("approved_at")
@@ -173,6 +181,7 @@ model Letter {
 
   @@index([status, createdAt])
   @@index([categoryId, status])
+  @@index([categoryId, status, deletedAt])
   @@index([categoryId, letterMonth, letterYear])
   @@index([letterTypeId, status])
   @@map("letters")
